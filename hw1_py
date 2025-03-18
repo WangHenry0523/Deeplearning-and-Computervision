@@ -1,0 +1,354 @@
+from PyQt5 import uic
+from PyQt5 import QtWidgets
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import QFileDialog
+import  cv2
+import os
+import numpy as np
+from PIL import Image
+import torchvision.transforms as transforms
+import matplotlib.pyplot as plt
+import torchvision.models as models
+from torchsummary import summary
+import torch
+import torchvision
+import torch.nn as nn
+import torch.nn.functional as F
+class Ui_Form():
+
+    def __init__(self):
+        self.ui = uic.loadUi("HW1.ui") # 從ui檔中動態加載
+        self.ui.loadimage1.clicked.connect(self.loadimage1)
+        self.ui.loadimage2.clicked.connect(self.loadimage2)
+        self.ui.colorseparation.clicked.connect(self.colorseparation)
+        self.ui.colortransformation.clicked.connect(self.colortransformation)
+        self.ui.colorextraction.clicked.connect(self.colorextraction)
+        self.ui.gaussianblur.clicked.connect(self.gaussianblur)
+        self.ui.bilateralfilter.clicked.connect(self.bilateralfilter)
+        self.ui.medianfilter.clicked.connect(self.medianfilter)
+        self.ui.sobelx.clicked.connect(self.sobelx)
+        self.ui.sobely.clicked.connect(self.sobely)
+        self.ui.combination.clicked.connect(self.combination)
+        self.ui.gradient.clicked.connect(self.gradient)
+        self.ui.transform.clicked.connect(self.transform)
+        self.ui.showaug.clicked.connect(self.showaug)
+        self.ui.showmodel.clicked.connect(self.showmodel)
+        self.ui.showac.clicked.connect(self.showac)
+        self.ui.loadimage.clicked.connect(self.loadimage)
+        self.ui.inference.clicked.connect(self.inference)
+        self.image1=None
+        self.image2=None   
+    def loadimage1(self):
+        file_path, _ = QFileDialog.getOpenFileName(None, "選擇圖像", "", "Image Files (*.jpg *.png *.bmp)")
+        if file_path:
+            self.image1 = cv2.imread(file_path)
+            self.ui.label1.setText(f"{os.path.relpath(file_path, os.getcwd())}")
+        else:
+            print("Failed to load or display image1")
+    def loadimage2(self):
+        file_path2, _ = QFileDialog.getOpenFileName(None, "選擇圖像", "", "Image Files (*.jpg *.png *.bmp)")
+        if file_path2:
+            self.image2 = cv2.imread(file_path2)
+            self.ui.label2.setText(f"{os.path.relpath(file_path2, os.getcwd())}")
+        else:
+            print("Failed to load or display image1")
+    def colorseparation(self):
+        if self.image1 is not None:
+            cv2.imshow('image1',self.image1)
+            b, g, r = cv2.split(self.image1)  
+            empty_channel = np.zeros_like(b)
+            blue_image = cv2.merge([b, empty_channel, empty_channel])
+            green_image = cv2.merge([empty_channel, g, empty_channel])
+            red_image = cv2.merge([empty_channel, empty_channel, r])
+            cv2.imshow("Blue Channel", blue_image)
+            cv2.imshow("Green Channel", green_image)
+            cv2.imshow("Red Channel", red_image)
+            cv2.waitKey(0)
+    def colortransformation(self):
+        if self.image1 is not None:
+            b, g, r = cv2.split(self.image1)  
+            empty_channel = np.zeros_like(b)
+            blue_image = cv2.merge([b, empty_channel, empty_channel])
+            green_image = cv2.merge([empty_channel, g, empty_channel])
+            red_image = cv2.merge([empty_channel, empty_channel, r])
+            I1 = cv2.cvtColor(self.image1, cv2.COLOR_BGR2GRAY)
+            I2=(blue_image+green_image+red_image)/3
+            I2 = (I2* 255).astype(np.uint8)
+            I2=cv2.cvtColor(I2,cv2.COLOR_BGR2GRAY)
+            cv2.imshow("grayscale_image1",I1)
+            cv2.imshow("Average weighted",I2)
+    def colorextraction(self):
+        if self.image1 is not None:
+            hsv=cv2.cvtColor(self.image1, cv2.COLOR_BGR2HSV)
+            lower_bound = np.array([17, 35, 25])
+            upper_bound = np.array([85, 255, 255])
+            mask=cv2.inRange(hsv, lower_bound, upper_bound)
+            mask_bgr=cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+            I2=cv2.bitwise_not(mask_bgr ,self.image1 ,mask)
+            cv2.imshow("mask",mask)
+            cv2.imshow("Image without yellow and green  ",I2)
+    def gaussianblur(self):
+        def on_change(value):
+            if self.image1 is not None:
+                m = value
+                kernel_size = (2*m+1,2*m+1)
+                blurred_image = cv2.GaussianBlur(self.image1, kernel_size, 0)
+                cv2.imshow("Gaussian Blurred Image", blurred_image)
+        if self.image1 is not None:
+            cv2.namedWindow('Gaussian Blurred Image')
+            cv2.createTrackbar('m', 'Gaussian Blurred Image', 1, 5, on_change)      
+            cv2.setTrackbarPos('m', 'Gaussian Blurred Image', 1)
+            cv2.imshow('Gaussian Blurred Image', self.image1)
+    def bilateralfilter(self):
+        def on_change(value):
+            if self.image1 is not None:
+                m = value
+                kernel_size = 2 * m + 1
+                sigma_color = 90
+                sigma_space = 90
+                filtered_image = cv2.bilateralFilter(self.image1, kernel_size, sigma_color, sigma_space)
+                cv2.imshow("Bilateral Filtered Image", filtered_image)
+        if self.image1 is not None:
+            cv2.namedWindow('Bilateral Filtered Image')
+            cv2.createTrackbar('m', 'Bilateral Filtered Image', 1, 5, on_change)
+            cv2.setTrackbarPos('m', 'Bilateral Filtered Image', 1)
+    def medianfilter(self):
+        def on_change(value):
+            if self.image1 is not None:
+                m = value
+                kernel_size = 2 * m + 1
+                filtered_image = cv2.medianBlur(self.image1, kernel_size)
+                cv2.imshow("Median Filtered Image", filtered_image)
+        if self.image1 is not None:
+            cv2.namedWindow('Median Filtered Image')
+            cv2.createTrackbar('m', 'Median Filtered Image', 1, 5, on_change)
+            cv2.setTrackbarPos('m', 'Median Filtered Image', 1)
+    def sobelx(self):
+        if self.image1 is not None:
+            gray_image1=cv2.cvtColor(self.image1, cv2.COLOR_BGR2GRAY)
+            gray_image1 = cv2.GaussianBlur(gray_image1,(3,3), 0)
+            sobel_x = np.array([[-1, 0, 1],
+                                [-2, 0, 2],
+                                [-1, 0, 1]])
+            height, width = gray_image1.shape
+            sobel_x_result = np.zeros((height, width), dtype=np.uint8)
+            pixel_valuex = np.zeros((height, width), dtype=np.float32)
+
+            for i in range(1, height - 1):
+                for j in range(1, width - 1):
+                    pixel_value_x = (
+                    sobel_x[0, 0] * gray_image1[i - 1, j - 1] + sobel_x[0, 1] * gray_image1[i - 1, j] + sobel_x[0, 2] * gray_image1[i - 1, j + 1] +
+                    sobel_x[1, 0] * gray_image1[i, j - 1] + sobel_x[1, 1] * gray_image1[i, j] + sobel_x[1, 2] * gray_image1[i, j + 1] +
+                    sobel_x[2, 0] * gray_image1[i + 1, j - 1] + sobel_x[2, 1] * gray_image1[i + 1, j] + sobel_x[2, 2] * gray_image1[i + 1, j + 1]
+                                  )
+                    pixel_valuex[i, j]= pixel_value_x
+                    sobel_x_result[i, j] = abs(pixel_value_x)
+
+        sobel_x_result=cv2.normalize(sobel_x_result,None,0,255,cv2.NORM_MINMAX)
+        self.sobel_x_result = sobel_x_result 
+        self.pixel_valuex=pixel_valuex
+        cv2.imshow('Sobel X',sobel_x_result)
+
+    def sobely(self):
+        if self.image1 is not None:
+            gray_image1=cv2.cvtColor(self.image1, cv2.COLOR_BGR2GRAY)
+            gray_image1 = cv2.GaussianBlur(gray_image1,(3,3), 0)
+            sobel_y = np.array([[-1, -2, -1],
+                                [0, 0, 0],
+                                [1, 2, 1]])
+            height, width = gray_image1.shape
+            sobel_y_result = np.zeros((height, width), dtype=np.uint8)
+            pixel_valuey= np.zeros((height, width), dtype=np.float32)
+            for i in range(1, height - 1):
+                for j in range(1, width - 1):
+                    pixel_value_y = (
+                    sobel_y[0, 0] * gray_image1[i - 1, j - 1] + sobel_y[0, 1] * gray_image1[i - 1, j] + sobel_y[0, 2] * gray_image1[i - 1, j + 1] +
+                    sobel_y[1, 0] * gray_image1[i, j - 1] + sobel_y[1, 1] * gray_image1[i, j] + sobel_y[1, 2] * gray_image1[i, j + 1] +
+                    sobel_y[2, 0] * gray_image1[i + 1, j - 1] + sobel_y[2, 1] * gray_image1[i + 1, j] + sobel_y[2, 2] * gray_image1[i + 1, j + 1]
+                                  )
+                    pixel_valuey [i,j]= pixel_value_y
+                    sobel_y_result[i, j] = abs(pixel_value_y)
+        sobel_y_result=cv2.normalize(sobel_y_result,None,0,255,cv2.NORM_MINMAX)
+        self.sobel_y_result = sobel_y_result
+        self.pixel_valuey=pixel_valuey
+        cv2.imshow('Sobel y',sobel_y_result)
+
+    def combination(self):
+         if self.sobel_x_result is not None and self.sobel_y_result is not None:
+            abs_grad_x = cv2.convertScaleAbs(self.sobel_x_result)
+            abs_grad_y = cv2.convertScaleAbs(self.sobel_y_result)
+            grad = cv2.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0)
+            combined_result = grad.astype(np.uint8)
+            cv2.imshow('Combination', combined_result)
+            threshold = 128
+            threshold_com=combined_result.copy()
+            threshold_com[threshold_com < threshold] = 0
+            threshold_com[threshold_com >= threshold] = 255
+            cv2.imshow('threshold',threshold_com)
+            self.combined_result=combined_result
+    def gradient(self):
+        gradient_angle = np.zeros((self.pixel_valuex.shape[0], self.pixel_valuex.shape[1]), dtype=np.float32) 
+        for i in range(self.pixel_valuex.shape[0]):
+            for j in range(self.pixel_valuex.shape[1]):
+                if (self.pixel_valuey[i][j]<0):
+                    gradient_angle[i][j] = np.arctan2(self.pixel_valuey[i][j],self.pixel_valuex[i][j])
+                    gradient_angle[i][j] = np.degrees(gradient_angle[i][j]).astype(np.uint8)+180
+                else:
+                    gradient_angle[i][j] = np.arctan2(self.pixel_valuey[i][j],self.pixel_valuex[i][j])
+                    gradient_angle[i][j] = np.degrees(gradient_angle[i][j]).astype(np.uint8)
+        mask1 = np.zeros_like(gradient_angle)
+        mask1[(gradient_angle >= 120) & (gradient_angle <= 180)] = 255
+        mask1 = mask1.astype(np.uint8)
+        mask2 = np.zeros_like(gradient_angle)
+        mask2[(gradient_angle >= 210) & (gradient_angle <= 330)] = 255
+        mask2 = mask2.astype(np.uint8)
+        result1 = cv2.bitwise_and(self.combined_result, mask1)
+        result2 = cv2.bitwise_and(self.combined_result, mask2)
+        cv2.imshow('Result 1 (120-180 degrees)', result1)
+        cv2.imshow('Result 2 (210-330 degrees)', result2)
+
+    def transform(self):
+        if self.image1 is not None:
+            rotation=eval(self.ui.plainTextEdit1.toPlainText())
+            scale=eval(self.ui.plainTextEdit2.toPlainText())
+            tx=eval(self.ui.plainTextEdit3.toPlainText())
+            ty=eval(self.ui.plainTextEdit4.toPlainText())
+            translation_matrix = np.float32([[1, 0, 240+tx], [0, 1, 200+ty]])
+            translated_image = cv2.warpAffine(self.image1, translation_matrix, (self.image1.shape[1], self.image1.shape[0]))
+            center_x = 240 + tx
+            center_y = 200 + ty
+            M = cv2.getRotationMatrix2D((center_x, center_y), rotation, scale)
+            image=cv2.warpAffine(translated_image,M,(int(self.image1.shape[1]), int(self.image1.shape[0])))
+            cv2.imshow('transform',image)
+            
+    def showaug(self):
+        data_transforms = transforms.Compose([
+                        transforms.RandomHorizontalFlip(),
+                        transforms.RandomVerticalFlip(),
+                        transforms.RandomRotation(30)
+                                            ])
+        folder_path = "Q5_image\Q5_1"
+        image_files = [os.path.join(folder_path, file) for file in os.listdir(folder_path)]
+        augmented_images = []
+        for image_file in image_files:
+            original_image = Image.open(image_file)
+            augmented_image = data_transforms(original_image)
+            augmented_images.append(augmented_image)
+        plt.figure(figsize=(12, 8))
+        for i in range(9):
+            plt.subplot(3, 3, i + 1)
+            plt.imshow(augmented_images[i])
+            plt.title(f"{os.path.basename(image_files[i]).replace('.png', '')}")
+        plt.show()        
+    def showmodel(self):
+        model = models.vgg19_bn(num_classes=10)
+        summary(model, (3, 32, 32))
+    def showac(self):
+        img1=cv2.imread("accuracy.png")
+        img2=cv2.imread("loss.png")
+        cv2.imshow("accuracy",img1)
+        cv2.imshow("loss",img2)
+    def loadimage(self):
+        file_path2, _ = QFileDialog.getOpenFileName(None, "選擇圖像", "", "Image Files (*.jpg *.png *.bmp)")
+        if file_path2:
+            qpixmap = QPixmap(file_path2)
+            qpixmap = qpixmap.scaled(128, 128)       
+            self.ui.label5.setPixmap(qpixmap)
+            self.file_path2=file_path2               
+    def inference(self):
+        class VGG19Net(nn.Module):
+            def __init__(self,num_classes=10):
+                super(VGG19Net,self).__init__()
+                self.model=nn.Sequential(
+                    nn.Conv2d(3, 64, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(64),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(64, 64, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(64),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(kernel_size=2, stride=2),
+                    
+                    nn.Conv2d(64, 128, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(128),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(128, 128, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(128),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(kernel_size=2, stride=2),
+
+                    nn.Conv2d(128, 256, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(256),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(256, 256, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(256),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(256, 256, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(256),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(kernel_size=2, stride=2),
+                    
+                    nn.Conv2d(256, 512, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(512),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(512, 512, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(512),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(512, 512, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(512),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(kernel_size=2, stride=2),
+
+                    nn.Conv2d(512, 512, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(512),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(512, 512, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(512),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(512, 512, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(512),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(kernel_size=2, stride=2)
+                )
+                self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
+                self.classifier = nn.Sequential(
+                    nn.Linear(7*7*512, 4096),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(),
+                    nn.Linear(4096, 4096),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(),
+                    nn.Linear(4096, num_classes)
+                )
+            def forward(self,x):
+                x = self.model(x)
+                x=self.avgpool(x)
+                x = x.view(x.size(0), -1)
+                x = self.classifier(x)
+                return x
+        class_name = ["airplane","automobile","bird","cat","deer","dog","frog","horse","ship","truck"]
+        img=Image.open(self.file_path2)
+        transform=torchvision.transforms.Compose([torchvision.transforms.Resize((32,32)),
+                                                    torchvision.transforms.ToTensor()])
+        image=transform(img)
+        model = VGG19Net()
+        checkpoint = torch.load('best_model.pth')
+        model.load_state_dict(checkpoint)
+        model.eval()
+        image=torch.reshape(image,(1,3,32,32))
+        with torch.no_grad():
+            output=model(image)
+            output_max=output.argmax(1)
+            probabilities = F.softmax(output, dim=1)
+            self.ui.label_11.setText(class_name[output_max.item()])
+            plt.figure(figsize=(8.5, 8.5))
+            plt.bar(class_name, probabilities[0])
+            plt.title("Probability of each class")
+            plt.xlabel("Class")
+            plt.ylabel("Probability")
+            plt.xticks(rotation=45)
+            plt.show()
+
+app = QtWidgets.QApplication([])
+stats = Ui_Form()
+stats.ui.show()
+app.exec_()
